@@ -5,7 +5,52 @@ import math
 
 def load(app):
   # todo /study_sessions POST
+  @app.route('/study_sessions', methods=['POST'])
+  def create_study_session():
+    """Create a new study session"""
+    data = request.get_json()
+    
+    # Validate required fields
+    if not data or 'group_id' not in data or 'study_activity_id' not in data:
+        return jsonify({
+            'error': 'Missing required fields. Need group_id and study_activity_id'
+        }), 400
 
+    try:
+        # Verify group exists
+        group = db.session.query(Group).filter_by(id=data['group_id']).first()
+        if not group:
+            return jsonify({'error': 'Group not found'}), 404
+
+        # Verify study activity exists
+        activity = db.session.query(StudyActivity).filter_by(
+            id=data['study_activity_id']
+        ).first()
+        if not activity:
+            return jsonify({'error': 'Study activity not found'}), 404
+
+        # Create new study session
+        new_session = StudySession(
+            group_id=data['group_id'],
+            study_activity_id=data['study_activity_id']
+        )
+        db.session.add(new_session)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Study session created successfully',
+            'session': {
+                'id': new_session.id,
+                'group_id': new_session.group_id,
+                'study_activity_id': new_session.study_activity_id,
+                'created_at': new_session.created_at.isoformat()
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+      
   @app.route('/api/study-sessions', methods=['GET'])
   @cross_origin()
   def get_study_sessions():
@@ -152,6 +197,51 @@ def load(app):
       return jsonify({"error": str(e)}), 500
 
   # todo POST /study_sessions/:id/review
+  @app.route('/study_sessions/<int:session_id>/review', methods=['POST'])
+  def create_session_review(session_id):
+    """Log a review attempt for a word during a study session"""
+    data = request.get_json()
+    
+    # Validate required fields
+    if not data or 'word_id' not in data or 'correct' not in data:
+        return jsonify({
+            'error': 'Missing required fields. Need word_id and correct status'
+        }), 400
+
+    try:
+        # Verify session exists
+        session = db.session.query(StudySession).filter_by(id=session_id).first()
+        if not session:
+            return jsonify({'error': 'Study session not found'}), 404
+
+        # Verify word exists
+        word = db.session.query(Word).filter_by(id=data['word_id']).first()
+        if not word:
+            return jsonify({'error': 'Word not found'}), 404
+
+        # Create new review item
+        review = WordReviewItem(
+            word_id=data['word_id'],
+            study_session_id=session_id,
+            correct=bool(data['correct'])
+        )
+        db.session.add(review)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Review logged successfully',
+            'review': {
+                'id': review.id,
+                'word_id': review.word_id,
+                'study_session_id': review.study_session_id,
+                'correct': review.correct,
+                'created_at': review.created_at.isoformat()
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
   @app.route('/api/study-sessions/reset', methods=['POST'])
   @cross_origin()
